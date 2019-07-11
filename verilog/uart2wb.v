@@ -1,10 +1,3 @@
-// PC sendet                           FPGA sendet
-// p Adressmodus                       p
-// 00 00 00 Adresse mit LSB first      k k k
-// w Datenmodus                        w
-// 00 00 00 Payload                    k k k oder n für Fehler
-
-
 module uart2wb(
     i_wb_clk,
     i_wb_rst,
@@ -13,6 +6,7 @@ module uart2wb(
     o_wb_dat,
     o_wb_stb,
     o_wb_cyc,
+    o_wb_addr,
     rx_dat,
     received,
     tx_dat,
@@ -28,13 +22,13 @@ output reg [7:0] o_wb_dat;
 output reg o_wb_stb;
 output o_wb_cyc;
 assign o_wb_cyc = o_wb_stb;
+output reg [23:0] o_wb_addr;
 
 // uart interface
 input [7:0] rx_dat;
 input received;
 output reg [7:0] tx_dat;
 output reg send;
-
 
 // . 0x2e
 // p 0x70
@@ -48,22 +42,22 @@ function [7:0] convert;
 input [3:0] val;
 begin
     case( val )
-        4'h0: convert = 7'h30;
-        4'h1: convert = 7'h31;
-        4'h2: convert = 7'h32;
-        4'h3: convert = 7'h33;
-        4'h4: convert = 7'h34;
-        4'h5: convert = 7'h35;
-        4'h6: convert = 7'h36;
-        4'h7: convert = 7'h37;
-        4'h8: convert = 7'h38;
-        4'h9: convert = 7'h39;
-        4'ha: convert = 7'h42;
-        4'hb: convert = 7'h43;
-        4'hc: convert = 7'h44;
-        4'hd: convert = 7'h45;
-        4'he: convert = 7'h46;
-        4'hf: convert = 7'h47;
+        4'h0: convert = 8'h30;
+        4'h1: convert = 8'h31;
+        4'h2: convert = 8'h32;
+        4'h3: convert = 8'h33;
+        4'h4: convert = 8'h34;
+        4'h5: convert = 8'h35;
+        4'h6: convert = 8'h36;
+        4'h7: convert = 8'h37;
+        4'h8: convert = 8'h38;
+        4'h9: convert = 8'h39;
+        4'ha: convert = 8'h42;
+        4'hb: convert = 8'h43;
+        4'hc: convert = 8'h44;
+        4'hd: convert = 8'h45;
+        4'he: convert = 8'h46;
+        4'hf: convert = 8'h47;
     endcase
 end
 endfunction
@@ -119,8 +113,7 @@ localparam
     STATE_READ      = 4,
     STATE_READ2     = 5;
 
-reg [23:0] r_addr;
-reg [5:0] r_addr_nibble_idx;
+reg [5:0] o_wb_addr_nibble_idx;
 
 reg [7:0] r_data;
 reg r_data_nibble_idx;
@@ -132,12 +125,13 @@ begin
     o_wb_stb <= 1'b0;
     tx_dat <= 'h0;
     send <= 1'b0;
+    o_wb_addr <= 'h0;
     case(r_state)
         STATE_IDLE:
             if( r_decode == DECODE_SET_ADDR ) begin
                 r_state <= STATE_ADDRESS;
-                r_addr <= 'h0;
-                r_addr_nibble_idx <= 'h1;
+                o_wb_addr <= 'h0;
+                o_wb_addr_nibble_idx <= 'h1;
             end else if( r_decode == DECODE_WRITE_DATA ) begin
                 r_state <= STATE_DATA;
                 r_data_nibble_idx <= 'h0;
@@ -147,13 +141,13 @@ begin
                 if( r_decode[4] ) begin
                     r_state <= STATE_IDLE; // evaluate r_decode in next state
                 end else begin
-                    r_addr_nibble_idx[5:0] <= { r_addr_nibble_idx[4:0], 1'b0 };
-                    if     ( r_addr_nibble_idx[0] == 'b1 ) r_addr[7:4] <= r_decode[3:0];
-                    else if( r_addr_nibble_idx[1] == 'b1 ) r_addr[3:0] <= r_decode[3:0];
-                    else if( r_addr_nibble_idx[2] == 'b1 ) r_addr[15:12] <= r_decode[3:0];
-                    else if( r_addr_nibble_idx[3] == 'b1 ) r_addr[11:8] <= r_decode[3:0];
-                    else if( r_addr_nibble_idx[4] == 'b1 ) r_addr[23:20] <= r_decode[3:0];
-                    else if( r_addr_nibble_idx[5] == 'b1 ) r_addr[19:16] <= r_decode[3:0];
+                    o_wb_addr_nibble_idx[5:0] <= { o_wb_addr_nibble_idx[4:0], 1'b0 };
+                    if     ( o_wb_addr_nibble_idx[0] == 'b1 ) o_wb_addr[7:4] <= r_decode[3:0];
+                    else if( o_wb_addr_nibble_idx[1] == 'b1 ) o_wb_addr[3:0] <= r_decode[3:0];
+                    else if( o_wb_addr_nibble_idx[2] == 'b1 ) o_wb_addr[15:12] <= r_decode[3:0];
+                    else if( o_wb_addr_nibble_idx[3] == 'b1 ) o_wb_addr[11:8] <= r_decode[3:0];
+                    else if( o_wb_addr_nibble_idx[4] == 'b1 ) o_wb_addr[23:20] <= r_decode[3:0];
+                    else if( o_wb_addr_nibble_idx[5] == 'b1 ) o_wb_addr[19:16] <= r_decode[3:0];
                 end
             end
         STATE_DATA:
