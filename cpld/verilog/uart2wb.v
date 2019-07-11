@@ -6,6 +6,17 @@
 
 
 module uart2wb(
+    i_wb_clk,
+    i_wb_rst,
+    i_wb_ack,
+    i_wb_dat,
+    o_wb_dat,
+    o_wb_stb,
+    o_wb_cyc,
+    rx_dat,
+    received,
+    tx_dat,
+    send
 );
 
 // wb interface
@@ -13,15 +24,16 @@ input i_wb_clk;
 input i_wb_rst;
 input i_wb_ack;
 input [7:0] i_wb_dat;
-output [7:0] o_wb_dat;
-output i_wb_sel;
-output i_wb_cyc;
+output reg [7:0] o_wb_dat;
+output reg o_wb_stb;
+output o_wb_cyc;
+assign o_wb_cyc = o_wb_stb;
 
 // uart interface
 input [7:0] rx_dat;
 input received;
-output [7:0] tx_dat;
-output send;
+output reg [7:0] tx_dat;
+output reg send;
 
 
 // . 0x2e
@@ -32,13 +44,37 @@ output send;
 // A-F 0x41-0x46
 
 
+function [7:0] convert;
+input [3:0] val;
+begin
+    case( val )
+        4'h0: convert = 7'h30;
+        4'h1: convert = 7'h31;
+        4'h2: convert = 7'h32;
+        4'h3: convert = 7'h33;
+        4'h4: convert = 7'h34;
+        4'h5: convert = 7'h35;
+        4'h6: convert = 7'h36;
+        4'h7: convert = 7'h37;
+        4'h8: convert = 7'h38;
+        4'h9: convert = 7'h39;
+        4'ha: convert = 7'h42;
+        4'hb: convert = 7'h43;
+        4'hc: convert = 7'h44;
+        4'hd: convert = 7'h45;
+        4'he: convert = 7'h46;
+        4'hf: convert = 7'h47;
+    endcase
+end
+endfunction
+
 // input data evalutation
 localparam
-    DECODE_RESET = 5'h10,
-    DECODE_SET_ADDR = 5'h11,
-    DECODE_READ_DATA = 5'h12,
+    DECODE_RESET      = 5'h10,
+    DECODE_SET_ADDR   = 5'h11,
+    DECODE_READ_DATA  = 5'h12,
     DECODE_WRITE_DATA = 5'h13,
-    DECODE_INVALD = 5'h1f;
+    DECODE_INVALID    = 5'h1f;
 
 reg [4:0] r_decode;
 reg next;
@@ -80,7 +116,8 @@ localparam
     STATE_ADDRESS   = 1,
     STATE_DATA      = 2,
     STATE_WAITWRITE = 3,
-    STATE_READ      = 4;
+    STATE_READ      = 4,
+    STATE_READ2     = 5;
 
 reg [23:0] r_addr;
 reg [5:0] r_addr_nibble_idx;
@@ -88,15 +125,19 @@ reg [5:0] r_addr_nibble_idx;
 reg [7:0] r_data;
 reg r_data_nibble_idx;
 
-reg [] r_state;
+reg [2:0] r_state;
 always @(posedge i_wb_clk)
 begin
+    o_wb_dat <= 'h0;
+    o_wb_stb <= 1'b0;
+    tx_dat <= 'h0;
+    send <= 1'b0;
     case(r_state)
         STATE_IDLE:
             if( r_decode == DECODE_SET_ADDR ) begin
                 r_state <= STATE_ADDRESS;
                 r_addr <= 'h0;
-                r_nibble_idx <= 'h1;
+                r_addr_nibble_idx <= 'h1;
             end else if( r_decode == DECODE_WRITE_DATA ) begin
                 r_state <= STATE_DATA;
                 r_data_nibble_idx <= 'h0;
@@ -118,23 +159,39 @@ begin
         STATE_DATA:
             if ( next ) begin
                 if( r_data_nibble_idx ) begin
-                    r_data[3:0]] <= r_decode[3:0];
+                    //r_data[3:0]] <= r_decode[3:0];
                     r_state <= STATE_WAITWRITE;
-                    // hier auf bus schreiben
+                    o_wb_dat <= { r_data[3:0], r_decode[3:0] };
+                    o_wb_stb <= 1'b1;
                 end else begin
-                    r_data[7:4] <= r_decode[3:0];
+                    r_data[3:0] <= r_decode[3:0];
                 end
                 r_data_nibble_idx <= ~r_data_nibble_idx;
             end
         STATE_WAITWRITE:
             if ( i_wb_ack ) begin
+                o_wb_stb <= 'b0;
             end
         STATE_READ:
             if ( i_wb_ack ) begin
+                // send upper nibble
+                r_data <= i_wb_dat;
+                tx_dat <= convert(r_data[7:4]);
+                send <= 1'b1;
+                r_state <= STATE_READ2;
             end
+        STATE_READ2:
+            if( send ) begin
+                send <= 1'b0;
+            end else begin
+                send <= 1'b1;
+                tx_dat <= convert(r_data[3:0]);
+                r_state <= STATE_IDLE;
+            end
+            
     endcase
 
-    if( i_wb_rst || r_decode == DECODE_INVALD ) begin
+    if( i_wb_rst || r_decode == DECODE_INVALID ) begin
         r_state <= STATE_IDLE;
     end
 end
