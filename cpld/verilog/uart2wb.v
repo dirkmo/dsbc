@@ -80,7 +80,7 @@ localparam
     STATE_ADDRESS   = 1,
     STATE_DATA      = 2,
     STATE_WAITWRITE = 3,
-    STATE_WAITREAD  = 4;
+    STATE_READ      = 4;
 
 reg [23:0] r_addr;
 reg [5:0] r_addr_nibble_idx;
@@ -103,13 +103,17 @@ begin
             end
         STATE_ADDRESS:
             if( next ) begin
-                r_addr_nibble_idx[5:0] <= { r_addr_nibble_idx[4:0], 1'b0 };
-                if     ( r_addr_nibble_idx[0] == 'b1 ) r_addr[7:4] <= r_decode[3:0];
-                else if( r_addr_nibble_idx[1] == 'b1 ) r_addr[3:0] <= r_decode[3:0];
-                else if( r_addr_nibble_idx[2] == 'b1 ) r_addr[15:12] <= r_decode[3:0];
-                else if( r_addr_nibble_idx[3] == 'b1 ) r_addr[11:8] <= r_decode[3:0];
-                else if( r_addr_nibble_idx[4] == 'b1 ) r_addr[23:20] <= r_decode[3:0];
-                else if( r_addr_nibble_idx[5] == 'b1 ) r_addr[19:16] <= r_decode[3:0];
+                if( r_decode[4] ) begin
+                    r_state <= STATE_IDLE; // evaluate r_decode in next state
+                end else begin
+                    r_addr_nibble_idx[5:0] <= { r_addr_nibble_idx[4:0], 1'b0 };
+                    if     ( r_addr_nibble_idx[0] == 'b1 ) r_addr[7:4] <= r_decode[3:0];
+                    else if( r_addr_nibble_idx[1] == 'b1 ) r_addr[3:0] <= r_decode[3:0];
+                    else if( r_addr_nibble_idx[2] == 'b1 ) r_addr[15:12] <= r_decode[3:0];
+                    else if( r_addr_nibble_idx[3] == 'b1 ) r_addr[11:8] <= r_decode[3:0];
+                    else if( r_addr_nibble_idx[4] == 'b1 ) r_addr[23:20] <= r_decode[3:0];
+                    else if( r_addr_nibble_idx[5] == 'b1 ) r_addr[19:16] <= r_decode[3:0];
+                end
             end
         STATE_DATA:
             if ( next ) begin
@@ -123,10 +127,10 @@ begin
                 r_data_nibble_idx <= ~r_data_nibble_idx;
             end
         STATE_WAITWRITE:
-            begin
+            if ( i_wb_ack ) begin
             end
-        STATE_WAITREAD:
-            begin
+        STATE_READ:
+            if ( i_wb_ack ) begin
             end
     endcase
 
