@@ -39,31 +39,6 @@ output reg send;
 // 0-9 0x30-0x39
 // A-F 0x41-0x46
 
-
-function [7:0] convert;
-input [3:0] val;
-begin
-    case( val )
-        4'h0: convert = 8'h30;
-        4'h1: convert = 8'h31;
-        4'h2: convert = 8'h32;
-        4'h3: convert = 8'h33;
-        4'h4: convert = 8'h34;
-        4'h5: convert = 8'h35;
-        4'h6: convert = 8'h36;
-        4'h7: convert = 8'h37;
-        4'h8: convert = 8'h38;
-        4'h9: convert = 8'h39;
-        4'ha: convert = 8'h42;
-        4'hb: convert = 8'h43;
-        4'hc: convert = 8'h44;
-        4'hd: convert = 8'h45;
-        4'he: convert = 8'h46;
-        4'hf: convert = 8'h47;
-    endcase
-end
-endfunction
-
 // input data evalutation
 localparam
     DECODE_RESET      = 5'h10,
@@ -106,7 +81,6 @@ begin
     end
 end
 
-
 localparam
     STATE_IDLE      = 0,
     STATE_ADDRESS   = 1,
@@ -117,8 +91,11 @@ localparam
 
 reg [5:0] o_wb_addr_nibble_idx;
 
-reg [7:0] r_data;
+reg [3:0] r_data;
 reg r_data_nibble_idx;
+
+wire [3:0] nibble;
+reg [7:0] nibble_ascii;
 
 reg [2:0] r_state;
 always @(posedge i_wb_clk)
@@ -127,10 +104,9 @@ begin
     send <= 1'b0;
     o_wb_stb <= 1'b0;
     case(r_state)
-        STATE_IDLE: begin
+        STATE_IDLE: if( next ) begin
                 if( r_decode == DECODE_SET_ADDR ) begin
                     r_state <= STATE_ADDRESS;
-                    o_wb_addr <= 'h0;
                     o_wb_addr_nibble_idx <= 'h1;
                 end else if( r_decode == DECODE_WRITE_DATA ) begin
                     r_state <= STATE_DATA;
@@ -141,10 +117,16 @@ begin
                     r_state <= STATE_READ;
                 end
             end
-        STATE_ADDRESS:
-            if( next ) begin
-                if( r_decode[4] ) begin
-                    r_state <= STATE_IDLE; // evaluate r_decode in next state
+        STATE_ADDRESS: if( next ) begin
+                if( r_decode == DECODE_WRITE_DATA ) begin
+                    r_state <= STATE_DATA;
+                    r_data_nibble_idx <= 'h0;
+                end else if( r_decode == DECODE_READ_DATA ) begin
+                    o_wb_stb <= 1'b1;
+                    o_wb_rw <= 1'b1;
+                    r_state <= STATE_READ;
+                end else if( r_decode == DECODE_INVALID ) begin
+                    r_state <= STATE_IDLE;
                 end else begin
                     o_wb_addr_nibble_idx[5:0] <= { o_wb_addr_nibble_idx[4:0], 1'b0 };
                     if     ( o_wb_addr_nibble_idx[0] == 'b1 ) o_wb_addr[7:4] <= r_decode[3:0];
@@ -155,10 +137,8 @@ begin
                     else if( o_wb_addr_nibble_idx[5] == 'b1 ) o_wb_addr[19:16] <= r_decode[3:0];
                 end
             end
-        STATE_DATA:
-            if ( next ) begin
+        STATE_DATA: if ( next ) begin
                 if( r_data_nibble_idx ) begin
-                    //r_data[3:0]] <= r_decode[3:0];
                     r_state <= STATE_WAITWRITE;
                     o_wb_dat <= { r_data[3:0], r_decode[3:0] };
                     o_wb_stb <= 1'b1;
@@ -181,8 +161,8 @@ begin
                 if ( i_wb_ack ) begin
                     o_wb_stb <= 1'b0;
                     // send upper nibble
-                    r_data <= i_wb_dat;
-                    tx_dat <= convert(r_data[7:4]);
+                    r_data[3:0] <= i_wb_dat[3:0];
+                    tx_dat <= nibble_ascii;
                     send <= 1'b1;
                     r_state <= STATE_READ2;
                 end
@@ -192,7 +172,7 @@ begin
                 send <= 1'b0;
             end else begin
                 send <= 1'b1;
-                tx_dat <= convert(r_data[3:0]);
+                tx_dat <= nibble_ascii;
                 o_wb_addr <= o_wb_addr + 'h1;
                 r_state <= STATE_IDLE;
             end
@@ -203,6 +183,31 @@ begin
         r_state <= STATE_IDLE;
     end
 end
+
+// ascii encoder for uart-tx
+assign nibble = (r_state == STATE_READ) ? i_wb_dat[7:4] : r_data[3:0];
+always @(nibble)
+begin
+    case( nibble )
+        4'h0: nibble_ascii = 8'h30;
+        4'h1: nibble_ascii = 8'h31;
+        4'h2: nibble_ascii = 8'h32;
+        4'h3: nibble_ascii = 8'h33;
+        4'h4: nibble_ascii = 8'h34;
+        4'h5: nibble_ascii = 8'h35;
+        4'h6: nibble_ascii = 8'h36;
+        4'h7: nibble_ascii = 8'h37;
+        4'h8: nibble_ascii = 8'h38;
+        4'h9: nibble_ascii = 8'h39;
+        4'ha: nibble_ascii = 8'h41;
+        4'hb: nibble_ascii = 8'h42;
+        4'hc: nibble_ascii = 8'h43;
+        4'hd: nibble_ascii = 8'h44;
+        4'he: nibble_ascii = 8'h45;
+        4'hf: nibble_ascii = 8'h46;
+    endcase
+end
+
 
 endmodule
 

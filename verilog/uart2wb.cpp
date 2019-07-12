@@ -73,6 +73,15 @@ void wb_ack() {
     pCore->i_wb_ack = 0;
 }
 
+void wb_write(uint8_t d) {
+    pCore->i_wb_dat = d;
+    pCore->i_wb_ack = 1;
+    while(pCore->o_wb_cyc) tick();
+    pCore->i_wb_dat = 0;
+    pCore->i_wb_ack = 0;
+    tick();
+}
+
 int main(int argc, char *argv[]) {
     Verilated::traceEverOn(true);
     pCore = new Vuart2wb();
@@ -88,9 +97,28 @@ int main(int argc, char *argv[]) {
     assert(!pCore->o_wb_rw);
     assert(pCore->o_wb_addr == 0x012345);
     assert(pCore->o_wb_dat == 0xAF);
-
     wb_ack();
+    assert(!pCore->o_wb_cyc);
     tick(4);
+
+    uart_sendstr("wF9");
+    while( !pCore->o_wb_cyc ) tick();
+    assert(!pCore->o_wb_rw);
+    assert(pCore->o_wb_addr == 0x012346);
+    assert(pCore->o_wb_dat == 0xF9);
+    wb_ack();
+    assert(!pCore->o_wb_cyc);
+    tick(4);
+
+    // read
+    uart_sendstr("p00r");
+    while( !pCore->o_wb_cyc ) tick();
+    assert(pCore->o_wb_rw);
+    assert(pCore->o_wb_addr == 0x012300);
+    tick(4);
+    wb_write(0xA9);
+
+    tick(5);
 
     if (pTrace) {
         pTrace->close();
