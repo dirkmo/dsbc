@@ -76,7 +76,7 @@ begin
             8'h44: r_decode <= 'hd;
             8'h45: r_decode <= 'he;
             8'h46: r_decode <= 'hf;
-            default: r_decode <= DECODE_INVALID;
+            default: r_decode <= DECODE_RESET;
         endcase
     end
 end
@@ -89,7 +89,7 @@ localparam
     STATE_READ      = 4,
     STATE_READ2     = 5;
 
-reg [5:0] o_wb_addr_nibble_idx;
+reg [5:0] addr_nibble_idx;
 
 reg [3:0] r_data;
 reg r_data_nibble_idx;
@@ -107,7 +107,7 @@ begin
         STATE_IDLE: if( next ) begin
                 if( r_decode == DECODE_SET_ADDR ) begin
                     r_state <= STATE_ADDRESS;
-                    o_wb_addr_nibble_idx <= 'h1;
+                    addr_nibble_idx <= 'h1;
                 end else if( r_decode == DECODE_WRITE_DATA ) begin
                     r_state <= STATE_DATA;
                     r_data_nibble_idx <= 'h0;
@@ -125,16 +125,14 @@ begin
                     o_wb_stb <= 1'b1;
                     o_wb_rw <= 1'b1;
                     r_state <= STATE_READ;
-                end else if( r_decode == DECODE_INVALID ) begin
-                    r_state <= STATE_IDLE;
-                end else begin
-                    o_wb_addr_nibble_idx[5:0] <= { o_wb_addr_nibble_idx[4:0], 1'b0 };
-                    if     ( o_wb_addr_nibble_idx[0] == 'b1 ) o_wb_addr[7:4] <= r_decode[3:0];
-                    else if( o_wb_addr_nibble_idx[1] == 'b1 ) o_wb_addr[3:0] <= r_decode[3:0];
-                    else if( o_wb_addr_nibble_idx[2] == 'b1 ) o_wb_addr[15:12] <= r_decode[3:0];
-                    else if( o_wb_addr_nibble_idx[3] == 'b1 ) o_wb_addr[11:8] <= r_decode[3:0];
-                    else if( o_wb_addr_nibble_idx[4] == 'b1 ) o_wb_addr[23:20] <= r_decode[3:0];
-                    else if( o_wb_addr_nibble_idx[5] == 'b1 ) o_wb_addr[19:16] <= r_decode[3:0];
+                end else if( ~r_decode[4] ) begin
+                    addr_nibble_idx[5:0] <= { addr_nibble_idx[4:0], 1'b0 };
+                    if     ( addr_nibble_idx[0] == 'b1 ) o_wb_addr[7:4] <= r_decode[3:0];
+                    else if( addr_nibble_idx[1] == 'b1 ) o_wb_addr[3:0] <= r_decode[3:0];
+                    else if( addr_nibble_idx[2] == 'b1 ) o_wb_addr[15:12] <= r_decode[3:0];
+                    else if( addr_nibble_idx[3] == 'b1 ) o_wb_addr[11:8] <= r_decode[3:0];
+                    else if( addr_nibble_idx[4] == 'b1 ) o_wb_addr[23:20] <= r_decode[3:0];
+                    else if( addr_nibble_idx[5] == 'b1 ) o_wb_addr[19:16] <= r_decode[3:0];
                 end
             end
         STATE_DATA: if ( next ) begin
@@ -179,7 +177,7 @@ begin
             
     endcase
 
-    if( i_wb_rst || r_decode == DECODE_INVALID ) begin
+    if( i_wb_rst || r_decode == DECODE_RESET ) begin
         r_state <= STATE_IDLE;
     end
 end

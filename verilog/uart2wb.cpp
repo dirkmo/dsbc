@@ -120,6 +120,24 @@ int main(int argc, char *argv[]) {
 
     tick(5);
 
+    int addr = 0x012301;
+    for( int i = 0; i<4; i++ ) {
+        uart_send('r');
+        while( !pCore->o_wb_cyc ) tick();
+        assert(pCore->o_wb_rw);
+        assert(pCore->o_wb_addr == addr);
+        wb_write(i);
+        addr++;
+    }
+
+    tick(5);
+
+    // abort test
+    uart_sendstr("p0F.");
+    assert(pCore->o_wb_addr == 0x01230f);
+    assert(!pCore->o_wb_cyc);
+    assert(pCore->uart2wb__DOT__r_state == 0);
+
     if (pTrace) {
         pTrace->close();
         pTrace = NULL;
