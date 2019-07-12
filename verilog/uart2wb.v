@@ -7,6 +7,7 @@ module uart2wb(
     o_wb_stb,
     o_wb_cyc,
     o_wb_addr,
+    o_wb_rw,
     rx_dat,
     received,
     tx_dat,
@@ -23,6 +24,7 @@ output reg o_wb_stb;
 output o_wb_cyc;
 assign o_wb_cyc = o_wb_stb;
 output reg [23:0] o_wb_addr;
+output reg o_wb_rw;
 
 // uart interface
 input [7:0] rx_dat;
@@ -121,20 +123,23 @@ reg r_data_nibble_idx;
 reg [2:0] r_state;
 always @(posedge i_wb_clk)
 begin
-    o_wb_dat <= 'h0;
-    o_wb_stb <= 1'b0;
     tx_dat <= 'h0;
     send <= 1'b0;
-    o_wb_addr <= 'h0;
+    o_wb_stb <= 1'b0;
     case(r_state)
-        STATE_IDLE:
-            if( r_decode == DECODE_SET_ADDR ) begin
-                r_state <= STATE_ADDRESS;
-                o_wb_addr <= 'h0;
-                o_wb_addr_nibble_idx <= 'h1;
-            end else if( r_decode == DECODE_WRITE_DATA ) begin
-                r_state <= STATE_DATA;
-                r_data_nibble_idx <= 'h0;
+        STATE_IDLE: begin
+                if( r_decode == DECODE_SET_ADDR ) begin
+                    r_state <= STATE_ADDRESS;
+                    o_wb_addr <= 'h0;
+                    o_wb_addr_nibble_idx <= 'h1;
+                end else if( r_decode == DECODE_WRITE_DATA ) begin
+                    r_state <= STATE_DATA;
+                    r_data_nibble_idx <= 'h0;
+                end else if( r_decode == DECODE_READ_DATA ) begin
+                    o_wb_stb <= 1'b1;
+                    o_wb_rw <= 1'b1;
+                    r_state <= STATE_READ;
+                end
             end
         STATE_ADDRESS:
             if( next ) begin
@@ -157,22 +162,30 @@ begin
                     r_state <= STATE_WAITWRITE;
                     o_wb_dat <= { r_data[3:0], r_decode[3:0] };
                     o_wb_stb <= 1'b1;
+                    o_wb_rw <= 1'b0;
                 end else begin
                     r_data[3:0] <= r_decode[3:0];
                 end
                 r_data_nibble_idx <= ~r_data_nibble_idx;
             end
-        STATE_WAITWRITE:
-            if ( i_wb_ack ) begin
-                o_wb_stb <= 'b0;
+        STATE_WAITWRITE: begin
+                o_wb_stb <= 1'b1;
+                if ( i_wb_ack ) begin
+                    o_wb_stb <= 'b0;
+                    o_wb_addr <= o_wb_addr + 'h1;
+                    r_state <= STATE_IDLE;
+                end
             end
-        STATE_READ:
-            if ( i_wb_ack ) begin
-                // send upper nibble
-                r_data <= i_wb_dat;
-                tx_dat <= convert(r_data[7:4]);
-                send <= 1'b1;
-                r_state <= STATE_READ2;
+        STATE_READ: begin
+                o_wb_stb <= 1'b1;
+                if ( i_wb_ack ) begin
+                    o_wb_stb <= 1'b0;
+                    // send upper nibble
+                    r_data <= i_wb_dat;
+                    tx_dat <= convert(r_data[7:4]);
+                    send <= 1'b1;
+                    r_state <= STATE_READ2;
+                end
             end
         STATE_READ2:
             if( send ) begin
@@ -180,6 +193,7 @@ begin
             end else begin
                 send <= 1'b1;
                 tx_dat <= convert(r_data[3:0]);
+                o_wb_addr <= o_wb_addr + 'h1;
                 r_state <= STATE_IDLE;
             end
             
