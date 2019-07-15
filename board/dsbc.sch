@@ -124,7 +124,7 @@ Text Label 2500 2250 0    50   ~ 0
 MLB
 Text Label 2500 2150 0    50   ~ 0
 ~ABORT
-Text Label 2500 2050 0    50   ~ 0
+Text Label 3000 2050 0    50   ~ 0
 RDY
 Text Label 2500 1950 0    50   ~ 0
 VPB
@@ -512,4 +512,19 @@ R2
 NoConn ~ 2650 4350
 Text Notes 1300 5750 0    50   ~ 0
 0,7V max.\nRGB-Kanal: Widerstände zusammen 270 Ohm.\nIm Monitor sind 75 Ohm gegen GND.
+Wire Wire Line
+	2500 2050 2750 2050
+$Comp
+L Device:R_Small R?
+U 1 1 5D2CC268
+P 2850 2050
+F 0 "R?" V 2654 2050 50  0000 C CNN
+F 1 "R_Small" V 2745 2050 50  0000 C CNN
+F 2 "" H 2850 2050 50  0001 C CNN
+F 3 "~" H 2850 2050 50  0001 C CNN
+	1    2850 2050
+	0    1    1    0   
+$EndComp
+Wire Wire Line
+	2950 2050 3000 2050
 $EndSCHEMATC
