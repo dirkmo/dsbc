@@ -60,9 +60,25 @@ uart2wb uart2wb0(
     .send(send)
 );
 
-assign ram_ce_n = 1'b0;
-assign ram_we_n = rw;
-assign ram_oe_n = ~rw;
+sram2wb sram2wb0(
+    .i_wb_clk(i_clk),
+    .i_wb_stb(wb_stb),
+    .i_wb_cyc(wb_cyc),
+    .i_wb_rst(i_reset),
+    .i_wb_we(wb_we),
+    .i_wb_addr(addr),
+    .i_wb_dat(),
+    .o_wb_dat(sram2wb_dat),
+    .o_wb_ack(sram2wb_ack),
+
+    .i_ram_dat(ram_data),
+    .o_ram_dat(sram),
+    .o_ram_addr(sram_addr),
+    .o_ram_oe(ram_oe),
+    .o_ram_ce(ram_ce),
+    .o_ram_we(ram_we)
+);
+
 assign ram_data = rw ? 8'hz : rx_data;
 
 endmodule
