@@ -137,7 +137,7 @@ begin
         STATE_DATA: if ( next ) begin
                 if( r_data_nibble_idx ) begin
                     r_state <= STATE_WAITWRITE;
-                    o_wb_dat <= { r_data[3:0], r_decode[3:0] };
+                    o_wb_dat[7:0] <= { r_data[3:0], r_decode[3:0] };
                     o_wb_stb <= 1'b1;
                     o_wb_we <= 1'b1;
                 end else begin

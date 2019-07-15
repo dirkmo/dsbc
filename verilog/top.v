@@ -42,27 +42,23 @@ uart_tx #(.SYS_CLK(SYS_CLK), .BAUDRATE(BAUDRATE)) Uart0_tx(
     .i_clk(i_clk),
     .i_reset(i_reset),
     .i_dat(tx_data),
-    .i_send(send),
+    .i_fifo_push(send),
     .tx(uart_tx)
 );
 
-wire wb_ack;
-wire [7:0] uart2wb_wb_dat;
-wire [7:0] sram2wb_wb_dat;
 wire [23:0] wb_addr;
-
+wire [7:0] wb_dat;
+wire wb_ack;
 wire wb_stb;
 wire wb_cyc;
 wire wb_we;
 
-
-// Wishbone master
 uart2wb uart2wb0(
     .i_wb_clk(i_clk),
     .i_wb_rst(i_reset),
     .i_wb_ack(wb_ack),
-    .i_wb_dat(sram2wb_wb_dat),
-    .o_wb_dat(uart2wb_wb_dat),
+    .i_wb_dat(ram_data[7:0]),
+    .o_wb_dat(wb_dat),
     .o_wb_stb(wb_stb),
     .o_wb_cyc(wb_cyc),
     .o_wb_addr(wb_addr),
@@ -74,32 +70,10 @@ uart2wb uart2wb0(
     .send(send)
 );
 
-wire [17:0] sram_addr;
-
-// wishbone slave
-sram2wb sram2wb0(
-    .i_wb_clk(i_clk),
-    .i_wb_stb(wb_stb),
-    .i_wb_cyc(wb_cyc),
-    .i_wb_rst(i_reset),
-    .i_wb_we(wb_we),
-    .i_wb_addr(wb_addr[17:0]),
-    .i_wb_dat(uart2wb_wb_dat),
-    .o_wb_dat(sram2wb_wb_dat),
-    .o_wb_ack(sram2wb_ack),
-
-    .i_ram_dat(ram_data),
-    .o_ram_dat(sram2wb_dat),
-    .o_ram_addr(sram_addr),
-    .o_ram_oe(ram_oe),
-    .o_ram_ce(ram_ce),
-    .o_ram_we(ram_we)
-);
-
-assign ram_data[7:0] = ram_oe ? 8'hz : sram2wb_dat;
-assign ram_addr[17:0] = { 6'h0, sram_addr };
-assign ram_oe_n = ~ram_oe;
-assign ram_ce_n = ~ram_ce;
-assign ram_we_n = ~ram_we;
+assign ram_data[7:0] = wb_we ? wb_dat[7:0] : 8'hz;
+assign ram_addr[17:0] = wb_addr[17:0];
+assign ram_oe_n = ~wb_cyc;
+assign ram_ce_n = wb_we;
+assign ram_we_n = ~wb_we;
 
 endmodule

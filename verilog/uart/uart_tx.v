@@ -4,7 +4,7 @@ module uart_tx(
     i_clk,
     i_reset,
     i_dat,
-    i_send,
+    i_fifo_push,
     tx
 );
 
@@ -12,8 +12,7 @@ module uart_tx(
 input i_clk;
 input i_reset;
 input [7:0] i_dat;
-output [7:0] o_dat;
-input i_send;
+input i_fifo_push;
 output tx;
 
 parameter SYS_CLK = 'd25_000_000;
@@ -22,24 +21,22 @@ parameter BAUDRATE = 'd115200;
 localparam TICK = (SYS_CLK/BAUDRATE);
 
 //---------------------------------------------
-// bus slave
+// fifo
 
-wire active_tx;
-reg start_tx;
+wire [7:0] fifo_dat;
+reg fifo_pop;
+wire fifo_empty;
 
-assign o_dat[7:0] = { 7'b0, active_tx };
-
-reg [7:0] tx_reg; // data to send
-
-always @(posedge i_clk)
-begin
-    start_tx <= 0;
-    if( i_send && ~active_tx) begin
-        tx_reg <= i_dat;
-        start_tx <= 1;
-    end
-end
-
+fifo fifo0(
+    .i_clk(i_clk),
+	.i_reset(i_reset),
+    .i_dat(i_dat),
+    .o_dat(fifo_dat),
+    .i_push(i_fifo_push),
+    .i_pop(fifo_pop),
+	.o_empty(fifo_empty),
+	.o_full()
+);
 
 //---------------------------------------------
 // uart tx
@@ -50,7 +47,7 @@ reg [8:0] baud_tx;
 wire tick_tx = (baud_tx[8:0] == TICK[8:0]);
 
 always @(posedge i_clk) begin
-	if(start_tx || tick_tx) begin
+	if(fifo_pop || tick_tx) begin
 		baud_tx <= 0;
 	end else begin
 		baud_tx <= baud_tx + 1;
@@ -71,19 +68,21 @@ wire [2:0] bit_idx = state_tx[2:0];
 
 assign active_tx = (state_tx != IDLE);
 
-assign tx = (state_tx  < STOPBIT1) ? tx_reg[ bit_idx ] :
+assign tx = (state_tx  < STOPBIT1) ? fifo_dat[ bit_idx ] :
             (state_tx == STARTBIT) ? 1'b0 : // start bit
                                      1'b1;  // idle & stop bit
 
 always @(posedge i_clk)
 begin
+    fifo_pop <= 0;
     case( state_tx )
         INTERRUPT: // interrupt
             begin
                 state_tx <= IDLE;
+                fifo_pop <= 1;
             end
         IDLE: // idle, wait for start_tx
-            if( start_tx ) begin
+            if( ~fifo_empty ) begin
                 state_tx <= STARTBIT;
             end
         STARTBIT: // start bit
