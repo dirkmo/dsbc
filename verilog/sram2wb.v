@@ -22,14 +22,14 @@ input i_wb_stb; // TODO [x:0] !
 input i_wb_cyc;
 input i_wb_rst;
 input i_wb_we;
-input [7:0] i_wb_addr;
+input [17:0] i_wb_addr;
 input [7:0] i_wb_dat;
 output [7:0] o_wb_dat;
 output o_wb_ack;
 
-input i_ram_dat;
+input [7:0] i_ram_dat;
 output o_ram_dat;
-output [15:0] o_ram_addr;
+output [17:0] o_ram_addr;
 output o_ram_oe;
 output o_ram_ce;
 output o_ram_we;
