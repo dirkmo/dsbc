@@ -94,7 +94,7 @@ int main(int argc, char *argv[]) {
     // write to addr
     uart_sendstr("p452301wAF");
     while( !pCore->o_wb_cyc ) tick();
-    assert(!pCore->o_wb_rw);
+    assert(pCore->o_wb_we);
     assert(pCore->o_wb_addr == 0x012345);
     assert(pCore->o_wb_dat == 0xAF);
     wb_ack();
@@ -103,7 +103,7 @@ int main(int argc, char *argv[]) {
 
     uart_sendstr("wF9");
     while( !pCore->o_wb_cyc ) tick();
-    assert(!pCore->o_wb_rw);
+    assert(pCore->o_wb_we);
     assert(pCore->o_wb_addr == 0x012346);
     assert(pCore->o_wb_dat == 0xF9);
     wb_ack();
@@ -113,7 +113,7 @@ int main(int argc, char *argv[]) {
     // read
     uart_sendstr("p00r");
     while( !pCore->o_wb_cyc ) tick();
-    assert(pCore->o_wb_rw);
+    assert(!pCore->o_wb_we);
     assert(pCore->o_wb_addr == 0x012300);
     tick(4);
     wb_write(0xA9);
@@ -124,7 +124,7 @@ int main(int argc, char *argv[]) {
     for( int i = 0; i<4; i++ ) {
         uart_send('r');
         while( !pCore->o_wb_cyc ) tick();
-        assert(pCore->o_wb_rw);
+        assert(!pCore->o_wb_we);
         assert(pCore->o_wb_addr == addr);
         wb_write(i);
         addr++;

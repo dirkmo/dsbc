@@ -7,7 +7,7 @@ module uart2wb(
     o_wb_stb,
     o_wb_cyc,
     o_wb_addr,
-    o_wb_rw,
+    o_wb_we,
     rx_dat,
     received,
     tx_dat,
@@ -24,7 +24,7 @@ output reg o_wb_stb;
 output o_wb_cyc;
 assign o_wb_cyc = o_wb_stb;
 output reg [23:0] o_wb_addr;
-output reg o_wb_rw;
+output reg o_wb_we;
 
 // uart interface
 input [7:0] rx_dat;
@@ -103,6 +103,7 @@ begin
     tx_dat <= 'h0;
     send <= 1'b0;
     o_wb_stb <= 1'b0;
+    o_wb_we <= 1'b0;
     case(r_state)
         STATE_IDLE: if( next ) begin
                 if( r_decode == DECODE_SET_ADDR ) begin
@@ -113,7 +114,6 @@ begin
                     r_data_nibble_idx <= 'h0;
                 end else if( r_decode == DECODE_READ_DATA ) begin
                     o_wb_stb <= 1'b1;
-                    o_wb_rw <= 1'b1;
                     r_state <= STATE_READ;
                 end
             end
@@ -123,7 +123,6 @@ begin
                     r_data_nibble_idx <= 'h0;
                 end else if( r_decode == DECODE_READ_DATA ) begin
                     o_wb_stb <= 1'b1;
-                    o_wb_rw <= 1'b1;
                     r_state <= STATE_READ;
                 end else if( ~r_decode[4] ) begin
                     addr_nibble_idx[5:0] <= { addr_nibble_idx[4:0], 1'b0 };
@@ -140,7 +139,7 @@ begin
                     r_state <= STATE_WAITWRITE;
                     o_wb_dat <= { r_data[3:0], r_decode[3:0] };
                     o_wb_stb <= 1'b1;
-                    o_wb_rw <= 1'b0;
+                    o_wb_we <= 1'b1;
                 end else begin
                     r_data[3:0] <= r_decode[3:0];
                 end
@@ -148,8 +147,10 @@ begin
             end
         STATE_WAITWRITE: begin
                 o_wb_stb <= 1'b1;
+                o_wb_we <= 1'b1;
                 if ( i_wb_ack ) begin
                     o_wb_stb <= 'b0;
+                    o_wb_we <= 1'b0;
                     o_wb_addr <= o_wb_addr + 'h1;
                     r_state <= STATE_IDLE;
                 end
