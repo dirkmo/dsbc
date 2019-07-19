@@ -346,17 +346,17 @@ NoConn ~ 2050 5150
 NoConn ~ 2050 4950
 NoConn ~ 2050 4850
 NoConn ~ 2650 4550
-Text Label 6050 1800 0    50   ~ 0
-R0
-Text Label 6050 1900 0    50   ~ 0
-R1
-Text Label 6050 2000 0    50   ~ 0
-R2
 Text Label 5550 1800 2    50   ~ 0
-G0
+R0
+Text Label 6050 1800 0    50   ~ 0
+R1
 Text Label 5550 1900 2    50   ~ 0
-G1
+R2
+Text Label 6050 1900 0    50   ~ 0
+G0
 Text Label 5550 2000 2    50   ~ 0
+G1
+Text Label 6050 2000 0    50   ~ 0
 G2
 Text Label 5550 2100 2    50   ~ 0
 B0
