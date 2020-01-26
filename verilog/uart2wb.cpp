@@ -8,6 +8,8 @@ VerilatedVcdC *pTrace;
 Vuart2wb *pCore;
 uint64_t tickcount;
 
+uint8_t ram[0x100000];
+
 void opentrace(const char *vcdname) {
     if (!pTrace) {
         pTrace = new VerilatedVcdC;
@@ -18,6 +20,7 @@ void opentrace(const char *vcdname) {
 
 void tick(int count = 1) {
     while(count--) {
+        printf("tick %lld\n",tickcount);
         tickcount++;
 
         pCore->i_wb_clk = 0;
@@ -39,25 +42,25 @@ void tick(int count = 1) {
 }
 
 void reset() {
-    pCore->received = 0;
-    pCore->send = 0;
+    pCore->uart_received_strobe = 0;
+    pCore->uart_tx_trigger = 0;
     pCore->i_wb_rst = 1;
     tick();
     pCore->i_wb_rst = 0;
 }
 
 void uart_send( char c ) {
-    pCore->rx_dat = c;
-    pCore->received = 1;
+    pCore->uart_rx_dat = c;
+    pCore->uart_received_strobe = 1;
     tick();
-    pCore->rx_dat = 0;
-    pCore->received = 0;
+    pCore->uart_rx_dat = 0;
+    pCore->uart_received_strobe = 0;
     tick();
 }
 
 char uart_receive() {
-    while(!pCore->send) tick();
-    return pCore->tx_dat;
+    while(!pCore->uart_tx_trigger) tick();
+    return pCore->uart_tx_dat;
 }
 
 void uart_sendstr( const char *s ) {
@@ -82,6 +85,24 @@ void wb_write(uint8_t d) {
     tick();
 }
 
+void handle_wb(bool block = true) {
+    pCore->i_wb_ack = 0;
+    while( pCore->o_wb_stb ) {
+        assert(pCore->o_wb_addr<sizeof(ram));
+        if( pCore->o_wb_we ) {
+            printf("write ram[0x%06X] = 0x%02X\n", pCore->o_wb_addr, pCore->o_wb_dat);
+            ram[pCore->o_wb_addr] = pCore->o_wb_dat;
+            pCore->i_wb_ack = 1;
+        } else {
+            printf("read ram[0x%06X] = 0x%02X\n", pCore->o_wb_addr, ram[pCore->o_wb_addr]);
+            pCore->i_wb_dat = ram[pCore->o_wb_addr];
+            pCore->i_wb_ack = 1;
+        }
+        if(block) tick(); else break;
+    }
+    if( !pCore->o_wb_stb ) pCore->i_wb_ack = 0;
+}
+
 int main(int argc, char *argv[]) {
     Verilated::traceEverOn(true);
     pCore = new Vuart2wb();
@@ -90,53 +111,49 @@ int main(int argc, char *argv[]) {
     reset();
 
     tick();
+/*
+    // data register selection tests
+    printf("Test1 %lld\n",tickcount);
+    uart_sendstr("d");
+    assert(pCore->uart2wb__DOT__r_nibble_idx == 6);
 
-    // write to addr
-    uart_sendstr("p452301wAF");
-    while( !pCore->o_wb_cyc ) tick();
-    assert(pCore->o_wb_we);
-    assert(pCore->o_wb_addr == 0x012345);
-    assert(pCore->o_wb_dat == 0xAF);
-    wb_ack();
-    assert(!pCore->o_wb_cyc);
-    tick(4);
+    printf("Test2 %lld\n",tickcount);
+    uart_sendstr("a");
+    handle_wb();
+    assert(pCore->uart2wb__DOT__r_nibble_idx == 0);
 
-    uart_sendstr("wF9");
-    while( !pCore->o_wb_cyc ) tick();
-    assert(pCore->o_wb_we);
-    assert(pCore->o_wb_addr == 0x012346);
-    assert(pCore->o_wb_dat == 0xF9);
-    wb_ack();
-    assert(!pCore->o_wb_cyc);
-    tick(4);
-
-    // read
-    uart_sendstr("p00r");
-    while( !pCore->o_wb_cyc ) tick();
-    assert(!pCore->o_wb_we);
-    assert(pCore->o_wb_addr == 0x012300);
-    tick(4);
-    wb_write(0xA9);
-
-    tick(5);
-
-    int addr = 0x012301;
-    for( int i = 0; i<4; i++ ) {
-        uart_send('r');
-        while( !pCore->o_wb_cyc ) tick();
-        assert(!pCore->o_wb_we);
-        assert(pCore->o_wb_addr == addr);
-        wb_write(i);
-        addr++;
-    }
-
-    tick(5);
-
-    // abort test
-    uart_sendstr("p0F.");
-    assert(pCore->o_wb_addr == 0x01230f);
-    assert(!pCore->o_wb_cyc);
+    // write to addr test
+    printf("Test3 %lld\n",tickcount);
+    uart_sendstr("a543210dFAw");
+    handle_wb();
+    assert(ram[0x012345]==0xaf);
+    tick(2);
+    assert((pCore->uart2wb__DOT__registers & 0xFFFFFF) == 0x12346);
     assert(pCore->uart2wb__DOT__r_state == 0);
+
+    // auto-increment and write test
+    printf("Test4 %lld\n",tickcount);
+
+    uart_sendstr("d");
+    assert(pCore->uart2wb__DOT__r_nibble_idx == 6);
+
+    uart_sendstr("dB2w");
+    handle_wb();
+    assert(ram[0x012346]==0x2b);
+
+    // read test
+    printf("Test5 %lld\n",tickcount);
+
+    // reset test
+    uart_sendstr(".");
+    assert(pCore->o_reset == 1);
+*/
+
+    ram[0] = 0xd4;
+    uart_sendstr("a00r");
+    handle_wb();
+
+    tick(10);
 
     if (pTrace) {
         pTrace->close();
