@@ -98,6 +98,7 @@ end
 
 //------------------------------------------------------------------------------
 
+// register[] to keep address and data
 reg [31:0] registers;
 wire [7:0] data = registers[31:24];
 wire [23:0] address = registers[23:0];
@@ -110,7 +111,7 @@ localparam
     STATE_WRITE = 2;
 
 always @(posedge i_wb_clk) begin
-    if( next && ~r_decode[4] ) begin
+    if( next && ~r_decode[4] ) begin // r_decode[4] = 0: is number, else is special char
         case( r_nibble_idx )
             'h0: registers[ 3: 0] <= r_decode[3:0];
             'h1: registers[ 7: 4] <= r_decode[3:0];
@@ -127,46 +128,36 @@ always @(posedge i_wb_clk) begin
     end
 end
 
-/* verilator lint_off UNUSED */
 /* verilator lint_off BLKSEQ */
-integer TEST;
 
 reg [2:0] r_state;
 always @(posedge i_wb_clk)
 begin
     o_reset <= 0;
-    TEST = 0;
 
     case(r_state)
         STATE_IDLE: if( next ) begin
             if( r_decode == DECODE_SEL_AR ) begin
                 r_nibble_idx <= 'h0;
-                TEST = 1;
             end else if( r_decode == DECODE_SEL_DR ) begin
                 r_nibble_idx <= 'h6;
-                TEST = 2;
             end else if( ~r_decode[4] ) begin
                 r_nibble_idx <= r_nibble_idx + 'h1;
-                TEST = 3;
             end else if( r_decode == DECODE_READ_DATA ) begin
                 r_state <= STATE_READ;
-                TEST = 4;
             end else if( r_decode == DECODE_WRITE_DATA ) begin
                 r_state <= STATE_WRITE;
-                TEST = 5;
             end else if( r_decode == DECODE_RESET ) begin
                 o_reset <= 1;
-                TEST = 6;
             end
         end
-        STATE_READ: begin r_state <= STATE_IDLE; TEST = 7; end
-        STATE_WRITE: begin r_state <= STATE_IDLE; TEST = 8; end // no need to wait for wb transaction. go to IDLE immediately
+        STATE_READ: begin r_state <= STATE_IDLE; end
+        STATE_WRITE: begin r_state <= STATE_IDLE; end // no need to wait for wb transaction. go to IDLE immediately
     endcase
 
     if( i_wb_rst || r_decode == DECODE_RESET ) begin
         r_state <= STATE_IDLE;
         r_nibble_idx <= 'h0;
-        TEST = 9;
     end
 end
 
@@ -179,7 +170,7 @@ wire [3:0] nibble;
 reg [7:0] nibble_ascii;
 wire nibble_sel;
 
-assign nibble = nibble_sel ? r_wb_read_data[7:4] : r_wb_read_data[3:0];
+assign nibble = nibble_sel ? r_wb_read_data[3:0] : r_wb_read_data[7:4];
 
 always @(nibble)
 begin
@@ -255,18 +246,29 @@ end
 
 reg [1:0] r_uart_tx_state;
 
-wire nibble_sel = r_uart_tx_state[1:0] == 2'b01;
+wire nibble_sel = r_uart_tx_state[1:0] == 2'h0;
 
 assign uart_tx_dat = nibble_ascii;
-assign uart_tx_trigger = r_wb_read_done;
 always @(posedge i_wb_clk)
 begin
+    uart_tx_trigger <= 1'b0;
     r_uart_tx_state <= 0;
+    
     if( r_wb_read_done ) begin
-        r_uart_tx_state <= 1;
-    end
-    if( nibble_sel == 1) begin
-        
+        // byte has been read from wb, start sending first nibble
+        uart_tx_trigger <= 1'b1;
+        r_uart_tx_state <= 2'h1;
+    end else
+    
+    if( r_uart_tx_state == 2'h1 ) begin
+        // setting tx trigger back to 0
+        r_uart_tx_state <= 2'h2;
+    end else
+    
+    if( r_uart_tx_state == 2'h2 ) begin
+        // send next nibble (tx uart has a fifo)
+        uart_tx_trigger <= 1'b1;
+        r_uart_tx_state <= 2'h0;
     end
 end
 

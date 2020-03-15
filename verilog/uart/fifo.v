@@ -1,3 +1,5 @@
+// 4 bytes FIFO
+
 `timescale 1ns / 1ps
 
 module fifo(
